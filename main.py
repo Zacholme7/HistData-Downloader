@@ -9,8 +9,17 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
+import logging
+import sys
+
+# Create a custom logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(levelname)s - %(message)s')
 
 def get_all_ticker_urls():
+    logging.info("Getting the download links for all tickers")
+
     # send the request
     response = requests.get("https://www.histdata.com/download-free-forex-data/?/ascii/1-minute-bar-quotes")
     # Parse the HTML with Beautiful Soup
@@ -92,6 +101,7 @@ def download_info(url, download_dir):
     # Find the download link and click it
     download_link = driver.find_element(By.ID, "a_file")
     download_link.click()
+    logger.info(f"Downloaded: {url}")
 
     # Wait for download to complete
     time.sleep(10) # Adjust this delay as needed
@@ -100,6 +110,7 @@ def download_info(url, download_dir):
     driver.quit()
 
 def process_zip(ticker):
+    logger.info(f"Procesessing zip file for {ticker}")
     all_data = []
     for file in sorted(os.listdir(ticker)):
         if file.endswith(".zip"):
@@ -119,6 +130,7 @@ def process_zip(ticker):
                         text_path = os.path.join(ticker, filename)
                         os.remove(text_path)
                     elif filename.endswith(".csv"):
+                        logger.info(f"Processing file {filename}")
                         # construct the path to the csv
                         csv_path = os.path.join(ticker, filename)
 
@@ -131,12 +143,16 @@ def process_zip(ticker):
 
                         # done with the csv, remove it
                         os.remove(csv_path)
+                        logger.info(f"Finished processing file {filename}")
 
             # done with the current zip file, remove it
             os.remove(zip_path)
 
     # done processing, remove the directory
-    os.remove(ticker)
+    os.rmdir(ticker)
+
+    logger.info(f"Done processing zip file for {ticker}")
+
     # merge the dataframes and save it to a csv
     merged_df = pd.concat(all_data)
     merged_df.to_csv(os.path.join("downloaded_tickers", ticker, ticker + "_merged.csv"), index=False, sep=',')
@@ -145,11 +161,10 @@ def process_zip(ticker):
 if __name__ == "__main__":
 
     # the tickers that you want to download, add them to the list 
-    tickers_to_download = ["EURUSD", "USDJPY"]
+    tickers_to_download = ["EURUSD"]
 
     # get all the tickers and their links
     tickers = get_all_ticker_urls()
-
 
     # make downloads directory and directory for the tickers
     if not os.path.exists("downloaded_tickers"):
@@ -163,6 +178,7 @@ if __name__ == "__main__":
     # get retrieve all the info for our tickers
     for ticker in tickers_to_download:
         url = tickers.loc[ticker, "URL"] # extract the url to for the page containing all of the dates
+        logger.info(f"Getting all of the date dowload links for {ticker}")
         ticker_dates = get_ticker_date_urls(url) # retrieve the links for all the dates
 
         # construct a thread that will download the data for each date
